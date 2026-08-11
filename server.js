@@ -7,6 +7,12 @@ const { Server } = require("socket.io");
 const app = express();
 const server = http.createServer(app);
 
+/*
+|--------------------------------------------------------------------------
+| CORS
+|--------------------------------------------------------------------------
+*/
+
 app.use(
 	cors({
 		origin: "*",
@@ -14,12 +20,24 @@ app.use(
 	}),
 );
 
+/*
+|--------------------------------------------------------------------------
+| SOCKET.IO
+|--------------------------------------------------------------------------
+*/
+
 const io = new Server(server, {
 	cors: {
 		origin: "*",
 		methods: ["GET", "POST"],
 	},
 });
+
+/*
+|--------------------------------------------------------------------------
+| PORT
+|--------------------------------------------------------------------------
+*/
 
 const PORT = process.env.PORT || 3001;
 
@@ -30,39 +48,97 @@ const PORT = process.env.PORT || 3001;
 */
 
 const SUITS = [
-	{ symbol: "♠", name: "Spades", color: "black" },
-	{ symbol: "♥", name: "Hearts", color: "red" },
-	{ symbol: "♦", name: "Diamonds", color: "red" },
-	{ symbol: "♣", name: "Clubs", color: "black" },
+	{
+		symbol: "♠",
+		name: "Spades",
+		color: "black",
+	},
+	{
+		symbol: "♥",
+		name: "Hearts",
+		color: "red",
+	},
+	{
+		symbol: "♦",
+		name: "Diamonds",
+		color: "red",
+	},
+	{
+		symbol: "♣",
+		name: "Clubs",
+		color: "black",
+	},
 ];
 
 const RANKS = [
-	{ value: 1, label: "A" },
-	{ value: 2, label: "2" },
-	{ value: 3, label: "3" },
-	{ value: 4, label: "4" },
-	{ value: 5, label: "5" },
-	{ value: 6, label: "6" },
-	{ value: 7, label: "7" },
-	{ value: 8, label: "8" },
-	{ value: 9, label: "9" },
-	{ value: 10, label: "10" },
-	{ value: 11, label: "J" },
-	{ value: 12, label: "Q" },
-	{ value: 13, label: "K" },
+	{
+		value: 1,
+		label: "A",
+	},
+	{
+		value: 2,
+		label: "2",
+	},
+	{
+		value: 3,
+		label: "3",
+	},
+	{
+		value: 4,
+		label: "4",
+	},
+	{
+		value: 5,
+		label: "5",
+	},
+	{
+		value: 6,
+		label: "6",
+	},
+	{
+		value: 7,
+		label: "7",
+	},
+	{
+		value: 8,
+		label: "8",
+	},
+	{
+		value: 9,
+		label: "9",
+	},
+	{
+		value: 10,
+		label: "10",
+	},
+	{
+		value: 11,
+		label: "J",
+	},
+	{
+		value: 12,
+		label: "Q",
+	},
+	{
+		value: 13,
+		label: "K",
+	},
 ];
 
 /*
 |--------------------------------------------------------------------------
 | IN-MEMORY ROOMS
 |--------------------------------------------------------------------------
+|
+| Rooms are intentionally stored only in memory.
+|
 */
 
 const rooms = new Map();
 
 /*
 |--------------------------------------------------------------------------
-| HELPERS
+| ROOM CODE
 |--------------------------------------------------------------------------
 */
 
@@ -79,25 +155,49 @@ function generateRoomCode() {
 	return code;
 }
 
+/*
+|--------------------------------------------------------------------------
+| CREATE DECK
+|--------------------------------------------------------------------------
+*/
+
 function createDeck() {
 	const cards = [];
+
 	let id = 1;
 
-	SUITS.forEach((suit, suitIndex) => {
-		RANKS.forEach((rank) => {
+	for (
+		let suitIndex = 0;
+		suitIndex < SUITS.length;
+		suitIndex++
+	) {
+		const suit = SUITS[suitIndex];
+
+		for (const rank of RANKS) {
 			cards.push({
 				id: id++,
+
 				suit: suit.symbol,
+
 				suitName: suit.name,
+
 				suitIndex,
+
 				rank: rank.label,
+
 				rankValue: rank.value,
 			});
-		});
-	});
+		}
+	}
 
 	return cards;
 }
+
+/*
+|--------------------------------------------------------------------------
+| SHUFFLE
+|--------------------------------------------------------------------------
+*/
 
 function shuffle(array) {
 	const result = [...array];
@@ -111,6 +211,17 @@ function shuffle(array) {
 	return result;
 }
 
+/*
+|--------------------------------------------------------------------------
+| CARD VALUE
+|--------------------------------------------------------------------------
+|
+| A = 1
+| 2-9 = face value
+| 10/J/Q/K = 10
+|
+*/
+
 function cardValue(card) {
 	if (!card) {
 		return 0;
@@ -122,26 +233,41 @@ function cardValue(card) {
 		return 0;
 	}
 
-	return value >= 10 ? 10 : value;
+	if (value >= 10) {
+		return 10;
+	}
+
+	return value;
 }
+
+/*
+|--------------------------------------------------------------------------
+| HAND VALUE
+|--------------------------------------------------------------------------
+*/
 
 function handValue(hand) {
 	if (!Array.isArray(hand)) {
 		return 0;
 	}
 
-	return hand.reduce(
-		(total, card) => total + cardValue(card),
-		0,
-	);
+	return hand.reduce((total, card) => {
+		return total + cardValue(card);
+	}, 0);
 }
+
+/*
+|--------------------------------------------------------------------------
+| VALIDATE CARD
+|--------------------------------------------------------------------------
+*/
 
 function isValidCard(card) {
 	if (!card) {
 		return false;
 	}
 
-	if (card.id == null) {
+	if (card.id === undefined || card.id === null) {
 		return false;
 	}
 
@@ -155,8 +281,23 @@ function isValidCard(card) {
 
 	const rankValue = Number(card.rankValue);
 
-	return Number.isFinite(rankValue);
+	if (!Number.isFinite(rankValue)) {
+		return false;
+	}
+
+	return true;
 }
+
+/*
+|--------------------------------------------------------------------------
+| VALID SET
+|--------------------------------------------------------------------------
+|
+| Example:
+|
+| 7♠ 7♥ 7♦
+|
+*/
 
 function isValidSet(cards) {
 	if (!Array.isArray(cards)) {
@@ -171,18 +312,32 @@ function isValidSet(cards) {
 		return false;
 	}
 
-	const rank = cards[0].rankValue;
+	const rank = Number(cards[0].rankValue);
 
 	const suits = new Set(
 		cards.map((card) => card.suit),
 	);
 
-	return (
-		cards.every(
-			(card) => card.rankValue === rank,
-		) && suits.size === cards.length
+	const sameRank = cards.every(
+		(card) => Number(card.rankValue) === rank,
 	);
+
+	const differentSuits =
+		suits.size === cards.length;
+
+	return sameRank && differentSuits;
 }
+
+/*
+|--------------------------------------------------------------------------
+| VALID RUN
+|--------------------------------------------------------------------------
+|
+| Example:
+|
+| 5♥ 6♥ 7♥
+|
+*/
 
 function isValidRun(cards) {
 	if (!Array.isArray(cards)) {
@@ -199,7 +354,11 @@ function isValidRun(cards) {
 
 	const suit = cards[0].suit;
 
-	if (!cards.every((card) => card.suit === suit)) {
+	const sameSuit = cards.every(
+		(card) => card.suit === suit,
+	);
+
+	if (!sameSuit) {
 		return false;
 	}
 
@@ -207,20 +366,29 @@ function isValidRun(cards) {
 		.map((card) => Number(card.rankValue))
 		.sort((a, b) => a - b);
 
-	const unique = [...new Set(values)];
+	const uniqueValues = [...new Set(values)];
 
-	if (unique.length !== cards.length) {
+	if (uniqueValues.length !== cards.length) {
 		return false;
 	}
 
-	for (let i = 1; i < unique.length; i++) {
-		if (unique[i] !== unique[i - 1] + 1) {
+	for (let i = 1; i < uniqueValues.length; i++) {
+		if (
+			uniqueValues[i] !==
+			uniqueValues[i - 1] + 1
+		) {
 			return false;
 		}
 	}
 
 	return true;
 }
+
+/*
+|--------------------------------------------------------------------------
+| VALID MELD
+|--------------------------------------------------------------------------
+*/
 
 function isValidMeld(cards) {
 	if (!Array.isArray(cards)) {
@@ -233,6 +401,12 @@ function isValidMeld(cards) {
 
 	return isValidSet(cards) || isValidRun(cards);
 }
+
+/*
+|--------------------------------------------------------------------------
+| CHECK IF CARD CAN BE ADDED TO MELD
+|--------------------------------------------------------------------------
+*/
 
 function canAddCardToMeld(card, meld) {
 	if (!isValidCard(card)) {
@@ -249,14 +423,24 @@ function canAddCardToMeld(card, meld) {
 	|--------------------------------------------------------------------------
 	*/
 
-	if (
-		meld.length < 4 &&
-		meld.every(
-			(existing) =>
-				existing.rankValue === meld[0].rankValue,
-		) &&
-		card.rankValue === meld[0].rankValue
-	) {
+	const isSet = meld.every(
+		(existing) =>
+			Number(existing.rankValue) ===
+			Number(meld[0].rankValue),
+	);
+
+	if (isSet) {
+		if (meld.length >= 4) {
+			return false;
+		}
+
+		if (
+			Number(card.rankValue) !==
+			Number(meld[0].rankValue)
+		) {
+			return false;
+		}
+
 		const alreadyExists = meld.some(
 			(existing) => existing.suit === card.suit,
 		);
@@ -270,34 +454,46 @@ function canAddCardToMeld(card, meld) {
 	|--------------------------------------------------------------------------
 	*/
 
-	if (
-		meld.every(
-			(existing) => existing.suit === meld[0].suit,
-		) &&
-		card.suit === meld[0].suit
-	) {
-		const values = meld
-			.map((existing) => Number(existing.rankValue))
-			.concat(Number(card.rankValue))
-			.sort((a, b) => a - b);
+	const sameSuit = meld.every(
+		(existing) => existing.suit === meld[0].suit,
+	);
 
-		const unique = [...new Set(values)];
-
-		if (unique.length !== values.length) {
-			return false;
-		}
-
-		for (let i = 1; i < unique.length; i++) {
-			if (unique[i] !== unique[i - 1] + 1) {
-				return false;
-			}
-		}
-
-		return true;
+	if (!sameSuit) {
+		return false;
 	}
 
-	return false;
+	if (card.suit !== meld[0].suit) {
+		return false;
+	}
+
+	const values = meld
+		.map((existing) => Number(existing.rankValue))
+		.concat(Number(card.rankValue))
+		.sort((a, b) => a - b);
+
+	const uniqueValues = [...new Set(values)];
+
+	if (uniqueValues.length !== values.length) {
+		return false;
+	}
+
+	for (let i = 1; i < uniqueValues.length; i++) {
+		if (
+			uniqueValues[i] !==
+			uniqueValues[i - 1] + 1
+		) {
+			return false;
+		}
+	}
+
+	return true;
 }
+
+/*
+|--------------------------------------------------------------------------
+| REMOVE CARDS FROM HAND
+|--------------------------------------------------------------------------
+*/
 
 function removeCards(hand, ids) {
 	const idSet = new Set(
@@ -309,6 +505,12 @@ function removeCards(hand, ids) {
 	);
 }
 
+/*
+|--------------------------------------------------------------------------
+| GET CURRENT PLAYER
+|--------------------------------------------------------------------------
+*/
+
 function getCurrentPlayer(room) {
 	if (!room || !Array.isArray(room.players)) {
 		return null;
@@ -319,6 +521,12 @@ function getCurrentPlayer(room) {
 	);
 }
 
+/*
+|--------------------------------------------------------------------------
+| GET PLAYER BY SOCKET
+|--------------------------------------------------------------------------
+*/
+
 function getPlayer(room, socketId) {
 	if (!room || !Array.isArray(room.players)) {
 		return null;
@@ -328,6 +536,12 @@ function getPlayer(room, socketId) {
 		(player) => player.socketId === socketId,
 	);
 }
+
+/*
+|--------------------------------------------------------------------------
+| NEXT PLAYER
+|--------------------------------------------------------------------------
+*/
 
 function nextPlayer(room) {
 	if (
@@ -344,15 +558,29 @@ function nextPlayer(room) {
 
 	room.turnPhase = "draw";
 
+	/*
+	|--------------------------------------------------------------------------
+	| Clear pending taken-discard state.
+	|--------------------------------------------------------------------------
+	*/
+
 	room.lastTakenDiscardId = null;
 }
+
+/*
+|--------------------------------------------------------------------------
+| SERIALIZE ROOM
+|--------------------------------------------------------------------------
+*/
 
 function serializeRoom(room) {
 	const currentPlayer = getCurrentPlayer(room);
 
 	return {
 		roomCode: room.roomCode,
+
 		status: room.status,
+
 		turnPhase: room.turnPhase,
 
 		currentPlayerIndex: room.currentPlayerIndex,
@@ -363,13 +591,21 @@ function serializeRoom(room) {
 			? room.deck.length
 			: 0,
 
+		/*
+		|--------------------------------------------------------------------------
+		| ALL DISCARDED CARDS ARE SENT
+		|--------------------------------------------------------------------------
+		*/
+
 		discardPile: Array.isArray(room.discardPile)
 			? room.discardPile
 			: [],
 
 		players: room.players.map((player) => ({
 			id: player.id,
+
 			name: player.name,
+
 			socketId: player.socketId,
 
 			hand: Array.isArray(player.hand)
@@ -380,18 +616,41 @@ function serializeRoom(room) {
 				? player.melds
 				: [],
 
+			/*
+				|--------------------------------------------------------------------------
+				| POINTS ARE ALWAYS NUMERIC
+				|--------------------------------------------------------------------------
+				*/
+
 			points: handValue(player.hand),
 
 			connected: player.connected,
 		})),
 
 		winner: room.winner,
+
 		winReason: room.winReason,
+
+		/*
+		|--------------------------------------------------------------------------
+		| IMPORTANT:
+		| Frontend uses this to display UNDO.
+		|--------------------------------------------------------------------------
+		*/
 
 		lastTakenDiscardId:
 			room.lastTakenDiscardId ?? null,
+
+		lastTakenDiscardPlayerId:
+			room.lastTakenDiscardPlayerId ?? null,
 	};
 }
+
+/*
+|--------------------------------------------------------------------------
+| BROADCAST GAME STATE
+|--------------------------------------------------------------------------
+*/
 
 function broadcastRoom(room) {
 	if (!room) {
@@ -402,6 +661,12 @@ function broadcastRoom(room) {
 		.to(room.roomCode)
 		.emit("game:state", serializeRoom(room));
 }
+
+/*
+|--------------------------------------------------------------------------
+| SEND ERROR
+|--------------------------------------------------------------------------
+*/
 
 function sendError(socket, message) {
 	socket.emit("game:error", {
@@ -422,6 +687,13 @@ function startOnlineGame(room) {
 
 	room.status = "playing";
 
+	/*
+	|--------------------------------------------------------------------------
+	| The randomized first player receives
+	| 13 cards and must discard first.
+	|--------------------------------------------------------------------------
+	*/
+
 	room.turnPhase = "discard";
 
 	room.winner = null;
@@ -430,6 +702,12 @@ function startOnlineGame(room) {
 
 	room.lastTakenDiscardId = null;
 
+	/*
+	|--------------------------------------------------------------------------
+	| Reset players
+	|--------------------------------------------------------------------------
+	*/
+
 	room.players.forEach((player) => {
 		player.hand = [];
 		player.melds = [];
@@ -437,7 +715,7 @@ function startOnlineGame(room) {
 
 	/*
 	|--------------------------------------------------------------------------
-	| Randomize first player
+	| RANDOM FIRST PLAYER
 	|--------------------------------------------------------------------------
 	*/
 
@@ -447,7 +725,7 @@ function startOnlineGame(room) {
 
 	/*
 	|--------------------------------------------------------------------------
-	| Deal 12 cards to each player
+	| DEAL 12 CARDS EACH
 	|--------------------------------------------------------------------------
 	*/
 
@@ -463,7 +741,7 @@ function startOnlineGame(room) {
 
 	/*
 	|--------------------------------------------------------------------------
-	| First player gets the 13th card
+	| FIRST PLAYER GETS 13TH CARD
 	|--------------------------------------------------------------------------
 	*/
 
@@ -480,9 +758,44 @@ function startOnlineGame(room) {
 
 	io.to(room.roomCode).emit("game:message", {
 		type: "success",
+
 		text:
 			`🎲 ${starter.name} ` +
 			`starts and must discard first.`,
+	});
+}
+
+/*
+|--------------------------------------------------------------------------
+| FINISH GAME
+|--------------------------------------------------------------------------
+*/
+
+function finishGame(
+	room,
+	player,
+	reason = "Tong-its",
+) {
+	room.status = "finished";
+
+	room.winner = {
+		id: player.id,
+		name: player.name,
+	};
+
+	room.winReason =
+		`${player.name} successfully ` +
+		`got rid of all cards.`;
+
+	broadcastRoom(room);
+
+	io.to(room.roomCode).emit("game:message", {
+		type: "success",
+
+		text:
+			reason === "Tong-its"
+				? `🏆 ${player.name} wins by Tong-its!`
+				: `${player.name} wins!`,
 	});
 }
 
@@ -546,8 +859,8 @@ io.on("connection", (socket) => {
 			winner: null,
 
 			winReason: "",
-
 			lastTakenDiscardId: null,
+			lastTakenDiscardPlayerId: null,
 		};
 
 		rooms.set(roomCode, room);
@@ -560,13 +873,15 @@ io.on("connection", (socket) => {
 
 		socket.emit("room:created", {
 			roomCode,
+
 			playerId: 1,
 		});
 
 		broadcastRoom(room);
 
 		console.log(
-			`Room ${roomCode} created by ${playerName}`,
+			`Room ${roomCode} ` +
+				`created by ${playerName}`,
 		);
 	});
 
@@ -647,18 +962,26 @@ io.on("connection", (socket) => {
 
 		socket.emit("room:joined", {
 			roomCode,
+
 			playerId: 2,
 		});
 
 		io.to(roomCode).emit("game:message", {
 			type: "success",
-			text: `${playerName} joined the game.`,
+
+			text: `${playerName} ` + `joined the game.`,
 		});
+
+		/*
+			|--------------------------------------------------------------------------
+			| Start once second player joins.
+			|--------------------------------------------------------------------------
+			*/
 
 		startOnlineGame(room);
 
 		console.log(
-			`${playerName} joined room ${roomCode}`,
+			`${playerName} joined ` + `room ${roomCode}`,
 		);
 	});
 
@@ -699,12 +1022,6 @@ io.on("connection", (socket) => {
 
 		const card = room.deck.pop();
 
-		/*
-			|--------------------------------------------------------------------------
-			| Never allow an invalid card
-			|--------------------------------------------------------------------------
-			*/
-
 		if (!isValidCard(card)) {
 			if (card) {
 				room.deck.push(card);
@@ -718,6 +1035,13 @@ io.on("connection", (socket) => {
 			return;
 		}
 
+		/*
+			|--------------------------------------------------------------------------
+			| Add the ACTUAL card object.
+			| This prevents empty-card / NaN problems.
+			|--------------------------------------------------------------------------
+			*/
+
 		player.hand.push(card);
 
 		room.turnPhase = "discard";
@@ -728,7 +1052,8 @@ io.on("connection", (socket) => {
 
 		io.to(room.roomCode).emit("game:message", {
 			type: "info",
-			text: `${player.name} drew a card.`,
+
+			text: `${player.name} ` + `drew a card.`,
 		});
 	});
 
@@ -737,8 +1062,8 @@ io.on("connection", (socket) => {
 	| DRAW FROM DISCARD
 	|--------------------------------------------------------------------------
 	|
-	| IMPORTANT FIX:
-	| This action happens during the DRAW phase.
+	| IMPORTANT:
+	| This must happen during the DRAW phase.
 	|
 	*/
 
@@ -755,25 +1080,26 @@ io.on("connection", (socket) => {
 			return;
 		}
 
-		/*
-			|--------------------------------------------------------------------------
-			| CORRECT CHECK
-			|--------------------------------------------------------------------------
-			|
-			| The old backend checked:
-			|
-			| turnPhase !== "discard"
-			| AND
-			| turnPhase !== "draw"
-			|
-			| which made the operation impossible.
-			|
-			*/
-
 		if (
 			room.status !== "playing" ||
 			room.turnPhase !== "draw"
 		) {
+			return;
+		}
+
+		/*
+			|--------------------------------------------------------------------------
+			| Cannot take another discard
+			| while one is already pending.
+			|--------------------------------------------------------------------------
+			*/
+
+		if (room.lastTakenDiscardId !== null) {
+			sendError(
+				socket,
+				"You already took a discard. Meld it or undo the take first.",
+			);
+
 			return;
 		}
 
@@ -789,6 +1115,12 @@ io.on("connection", (socket) => {
 			return;
 		}
 
+		/*
+			|--------------------------------------------------------------------------
+			| ALWAYS TAKE THE TOP CARD
+			|--------------------------------------------------------------------------
+			*/
+
 		const card =
 			room.discardPile[room.discardPile.length - 1];
 
@@ -803,31 +1135,26 @@ io.on("connection", (socket) => {
 
 		/*
 			|--------------------------------------------------------------------------
-			| The discard can only be taken
-			| when it can immediately participate
-			| in a meld.
+			| Check whether the card can
+			| be added to an existing meld.
 			|--------------------------------------------------------------------------
 			*/
 
 		let canTake = false;
 
-		/*
-			|--------------------------------------------------------------------------
-			| Check existing melds
-			|--------------------------------------------------------------------------
-			*/
-
 		for (const meld of player.melds) {
 			if (canAddCardToMeld(card, meld)) {
 				canTake = true;
+
 				break;
 			}
 		}
 
 		/*
 			|--------------------------------------------------------------------------
-			| Check whether the card can form
-			| a new meld with two cards in hand.
+			| Check whether the card can
+			| form a new meld using two
+			| cards from the player's hand.
 			|--------------------------------------------------------------------------
 			*/
 
@@ -846,6 +1173,7 @@ io.on("connection", (socket) => {
 
 					if (isValidMeld(candidate)) {
 						canTake = true;
+
 						break;
 					}
 				}
@@ -867,7 +1195,8 @@ io.on("connection", (socket) => {
 
 		/*
 			|--------------------------------------------------------------------------
-			| Remove from discard pile
+			| Remove the actual card from
+			| the discard pile.
 			|--------------------------------------------------------------------------
 			*/
 
@@ -875,18 +1204,35 @@ io.on("connection", (socket) => {
 
 		/*
 			|--------------------------------------------------------------------------
-			| Add the actual card object to
-			| the server-side player's hand.
+			| Add exact card to player's hand.
 			|--------------------------------------------------------------------------
 			*/
 
 		player.hand.push(card);
 
+		/*
+			|--------------------------------------------------------------------------
+			| IMPORTANT:
+			| Remember which card was taken.
+			|
+			| Frontend uses this value to
+			| show the UNDO button.
+			|--------------------------------------------------------------------------
+			*/
+
 		room.lastTakenDiscardId = card.id;
+		room.lastTakenDiscardPlayerId = player.id;
+
+		room.turnPhase = "discard";
 
 		/*
 			|--------------------------------------------------------------------------
-			| Player must now meld before discarding.
+			| Player remains in discard phase.
+			|
+			| They must either:
+			|
+			| 1. Meld the taken card
+			| 2. Undo the take
 			|--------------------------------------------------------------------------
 			*/
 
@@ -896,50 +1242,122 @@ io.on("connection", (socket) => {
 
 		io.to(room.roomCode).emit("game:message", {
 			type: "info",
-			text: `${player.name} took the discarded card.`,
+
+			text:
+				`${player.name} ` +
+				`took the discarded card.`,
 		});
 	});
 
 	/*
 	|--------------------------------------------------------------------------
-	| UNDO DISCARD TAKE
+	| UNDO TAKEN DISCARD
 	|--------------------------------------------------------------------------
+	|
+	| This is the important fix.
+	|
+	| Player can return the exact card they
+	| just took from the discard pile.
+	|
 	*/
 
 	socket.on("game:undo-discard", () => {
 		const room = rooms.get(socket.data.roomCode);
 
 		if (!room) {
+			sendError(socket, "Room not found.");
 			return;
 		}
 
-		const player = getCurrentPlayer(room);
+		const player = room.players.find(
+			(p) => p.socketId === socket.id,
+		);
 
-		if (!player || player.socketId !== socket.id) {
+		if (!player) {
+			sendError(socket, "Player not found.");
+			return;
+		}
+
+		// Only the player who took the discard can undo it.
+		if (
+			room.lastTakenDiscardPlayerId !== player.id
+		) {
+			sendError(
+				socket,
+				"You do not have a taken discarded card to undo.",
+			);
+			return;
+		}
+
+		if (room.status !== "playing") {
+			sendError(
+				socket,
+				"The game is not currently playing.",
+			);
+			return;
+		}
+
+		if (room.turnPhase !== "discard") {
+			sendError(
+				socket,
+				"UNDO is only available after taking a discarded card.",
+			);
 			return;
 		}
 
 		if (room.lastTakenDiscardId === null) {
+			sendError(
+				socket,
+				"There is no discarded card to undo.",
+			);
 			return;
 		}
 
+		// Find the exact card in this player's hand.
 		const index = player.hand.findIndex(
-			(card) => card.id === room.lastTakenDiscardId,
+			(card) =>
+				card && card.id === room.lastTakenDiscardId,
 		);
 
 		if (index === -1) {
+			sendError(
+				socket,
+				"The taken discarded card could not be found in your hand.",
+			);
 			return;
 		}
 
-		const [card] = player.hand.splice(index, 1);
+		// Remove it from the player's hand.
+		const [takenCard] = player.hand.splice(
+			index,
+			1,
+		);
 
-		room.discardPile.push(card);
+		if (!takenCard) {
+			sendError(
+				socket,
+				"Unable to return the taken discarded card.",
+			);
+			return;
+		}
 
+		// Return the EXACT same card to the discard pile.
+		room.discardPile.push(takenCard);
+
+		// Clear pending UNDO state.
 		room.lastTakenDiscardId = null;
+		room.lastTakenDiscardPlayerId = null;
 
+		// Player can draw again.
 		room.turnPhase = "draw";
 
+		// Clear any selected card state if your room uses it.
 		broadcastRoom(room);
+
+		io.to(room.roomCode).emit("game:message", {
+			type: "info",
+			text: `${player.name} returned the taken discard.`,
+		});
 	});
 
 	/*
@@ -974,20 +1392,36 @@ io.on("connection", (socket) => {
 			!Array.isArray(cardIds) ||
 			cardIds.length < 3
 		) {
+			sendError(
+				socket,
+				"A meld requires at least 3 cards.",
+			);
+
 			return;
 		}
 
 		/*
 			|--------------------------------------------------------------------------
-			| Prevent duplicate IDs
+			| Prevent duplicate card IDs.
 			|--------------------------------------------------------------------------
 			*/
 
 		const uniqueIds = [...new Set(cardIds)];
 
 		if (uniqueIds.length !== cardIds.length) {
+			sendError(
+				socket,
+				"Duplicate cards were selected.",
+			);
+
 			return;
 		}
+
+		/*
+			|--------------------------------------------------------------------------
+			| Find selected cards in hand.
+			|--------------------------------------------------------------------------
+			*/
 
 		const cards = player.hand.filter((card) =>
 			cardIds.includes(card.id),
@@ -1002,6 +1436,12 @@ io.on("connection", (socket) => {
 			return;
 		}
 
+		/*
+			|--------------------------------------------------------------------------
+			| Validate meld.
+			|--------------------------------------------------------------------------
+			*/
+
 		if (!isValidMeld(cards)) {
 			sendError(
 				socket,
@@ -1011,14 +1451,27 @@ io.on("connection", (socket) => {
 			return;
 		}
 
+		/*
+			|--------------------------------------------------------------------------
+			| Remove cards from hand.
+			|--------------------------------------------------------------------------
+			*/
+
 		player.hand = removeCards(player.hand, cardIds);
+
+		/*
+			|--------------------------------------------------------------------------
+			| Add meld.
+			|--------------------------------------------------------------------------
+			*/
 
 		player.melds.push(cards);
 
 		/*
 			|--------------------------------------------------------------------------
-			| If the player melded the discard
-			| they took, they can now discard.
+			| If the meld contains the
+			| taken discard, clear the
+			| pending UNDO state.
 			|--------------------------------------------------------------------------
 			*/
 
@@ -1027,7 +1480,14 @@ io.on("connection", (socket) => {
 			cardIds.includes(room.lastTakenDiscardId)
 		) {
 			room.lastTakenDiscardId = null;
+			room.lastTakenDiscardPlayerId = null;
 		}
+
+		/*
+			|--------------------------------------------------------------------------
+			| Tong-its
+			|--------------------------------------------------------------------------
+			*/
 
 		if (player.hand.length === 0) {
 			finishGame(room, player, "Tong-its");
@@ -1040,7 +1500,7 @@ io.on("connection", (socket) => {
 
 	/*
 	|--------------------------------------------------------------------------
-	| ADD CARD TO MELD
+	| ADD CARD TO EXISTING MELD
 	|--------------------------------------------------------------------------
 	*/
 
@@ -1067,27 +1527,60 @@ io.on("connection", (socket) => {
 			return;
 		}
 
+		/*
+			|--------------------------------------------------------------------------
+			| Find card in current player's hand.
+			|--------------------------------------------------------------------------
+			*/
+
 		const card = player.hand.find(
 			(item) => item.id === cardId,
 		);
 
 		if (!card) {
+			sendError(
+				socket,
+				"Card not found in your hand.",
+			);
+
 			return;
 		}
+
+		/*
+			|--------------------------------------------------------------------------
+			| Find target player.
+			|--------------------------------------------------------------------------
+			*/
 
 		const targetPlayer = room.players.find(
 			(item) => item.id === targetPlayerId,
 		);
 
 		if (!targetPlayer) {
+			sendError(socket, "Target player not found.");
+
 			return;
 		}
+
+		/*
+			|--------------------------------------------------------------------------
+			| Find target meld.
+			|--------------------------------------------------------------------------
+			*/
 
 		const meld = targetPlayer.melds?.[meldIndex];
 
 		if (!meld) {
+			sendError(socket, "Meld not found.");
+
 			return;
 		}
+
+		/*
+			|--------------------------------------------------------------------------
+			| Validate card.
+			|--------------------------------------------------------------------------
+			*/
 
 		if (!canAddCardToMeld(card, meld)) {
 			sendError(
@@ -1098,15 +1591,40 @@ io.on("connection", (socket) => {
 			return;
 		}
 
+		/*
+			|--------------------------------------------------------------------------
+			| Add card.
+			|--------------------------------------------------------------------------
+			*/
+
 		meld.push(card);
+
+		/*
+			|--------------------------------------------------------------------------
+			| Remove from player's hand.
+			|--------------------------------------------------------------------------
+			*/
 
 		player.hand = removeCards(player.hand, [
 			cardId,
 		]);
 
+		/*
+			|--------------------------------------------------------------------------
+			| If this was the taken discard,
+			| clear UNDO.
+			|--------------------------------------------------------------------------
+			*/
+
 		if (room.lastTakenDiscardId === cardId) {
 			room.lastTakenDiscardId = null;
+			room.lastTakenDiscardPlayerId = null;
 		}
+		/*
+			|--------------------------------------------------------------------------
+			| Tong-its
+			|--------------------------------------------------------------------------
+			*/
 
 		if (player.hand.length === 0) {
 			finishGame(room, player, "Tong-its");
@@ -1119,7 +1637,7 @@ io.on("connection", (socket) => {
 
 	/*
 	|--------------------------------------------------------------------------
-	| DISCARD
+	| DISCARD CARD
 	|--------------------------------------------------------------------------
 	*/
 
@@ -1147,19 +1665,30 @@ io.on("connection", (socket) => {
 
 		/*
 			|--------------------------------------------------------------------------
-			| A player who took the discard
-			| must meld it first.
+			| If player took a discard,
+			| they must either:
+			|
+			| 1. Meld it
+			| 2. Undo it
+			|
+			| They cannot discard it.
 			|--------------------------------------------------------------------------
 			*/
 
 		if (room.lastTakenDiscardId !== null) {
 			sendError(
 				socket,
-				"You must meld the taken discard before discarding.",
+				"You must meld the taken discard or undo the take before discarding.",
 			);
 
 			return;
 		}
+
+		/*
+			|--------------------------------------------------------------------------
+			| Find card.
+			|--------------------------------------------------------------------------
+			*/
 
 		const card = player.hand.find(
 			(item) => item.id === cardId,
@@ -1174,11 +1703,29 @@ io.on("connection", (socket) => {
 			return;
 		}
 
+		/*
+			|--------------------------------------------------------------------------
+			| Remove from hand.
+			|--------------------------------------------------------------------------
+			*/
+
 		player.hand = removeCards(player.hand, [
 			cardId,
 		]);
 
+		/*
+			|--------------------------------------------------------------------------
+			| Add to discard pile.
+			|--------------------------------------------------------------------------
+			*/
+
 		room.discardPile.push(card);
+
+		/*
+			|--------------------------------------------------------------------------
+			| Tong-its.
+			|--------------------------------------------------------------------------
+			*/
 
 		if (player.hand.length === 0) {
 			finishGame(room, player, "Tong-its");
@@ -1188,7 +1735,7 @@ io.on("connection", (socket) => {
 
 		/*
 			|--------------------------------------------------------------------------
-			| Advance to next player.
+			| Move to next player.
 			|--------------------------------------------------------------------------
 			*/
 
@@ -1198,7 +1745,11 @@ io.on("connection", (socket) => {
 
 		io.to(room.roomCode).emit("game:message", {
 			type: "info",
-			text: `${player.name} discarded ${card.rank}${card.suit}.`,
+
+			text:
+				`${player.name} ` +
+				`discarded ` +
+				`${card.rank}${card.suit}.`,
 		});
 	});
 
@@ -1227,6 +1778,7 @@ io.on("connection", (socket) => {
 			.to(room.roomCode)
 			.emit("player:disconnected", {
 				playerId: player?.id,
+
 				playerName: player?.name,
 			});
 
@@ -1234,7 +1786,9 @@ io.on("connection", (socket) => {
 
 		/*
 			|--------------------------------------------------------------------------
-			| Remove waiting room when creator leaves
+			| Remove waiting room if creator
+			| disconnects before second
+			| player joins.
 			|--------------------------------------------------------------------------
 			*/
 
@@ -1251,33 +1805,6 @@ io.on("connection", (socket) => {
 
 /*
 |--------------------------------------------------------------------------
-| FINISH GAME
-|--------------------------------------------------------------------------
-*/
-
-function finishGame(room, player, reason) {
-	room.status = "finished";
-
-	room.winner = {
-		id: player.id,
-		name: player.name,
-	};
-
-	room.winReason = `${player.name} successfully got rid of all cards.`;
-
-	broadcastRoom(room);
-
-	io.to(room.roomCode).emit("game:message", {
-		type: "success",
-		text:
-			reason === "Tong-its"
-				? `🏆 ${player.name} wins by Tong-its!`
-				: `${player.name} wins!`,
-	});
-}
-
-/*
-|--------------------------------------------------------------------------
 | HEALTH CHECK
 |--------------------------------------------------------------------------
 */
@@ -1285,7 +1812,27 @@ function finishGame(room, player, reason) {
 app.get("/", (req, res) => {
 	res.json({
 		status: "online",
+
 		service: "Tong-its Socket.IO Server",
+
+		rooms: rooms.size,
+
+		timestamp: new Date().toISOString(),
+	});
+});
+
+/*
+|--------------------------------------------------------------------------
+| OPTIONAL HEALTH CHECK
+|--------------------------------------------------------------------------
+*/
+
+app.get("/health", (req, res) => {
+	res.json({
+		ok: true,
+
+		service: "Tong-its Socket.IO Server",
+
 		rooms: rooms.size,
 	});
 });
